@@ -4,24 +4,18 @@ from discord.ext import commands
 from .database import load, save, ensure_storage
 
 
-
 class FlightPlugin(commands.Cog):
 
     __version__ = "1.0.0"
 
-
     def __init__(self, bot):
-
         self.bot = bot
-
         ensure_storage()
 
 
-
-    # ==============================
-    # MAIN FLIGHT GROUP
-    # ==============================
-
+    # ==========================
+    # MAIN FLIGHT COMMAND
+    # ==========================
 
     @commands.group(
         name="flight",
@@ -29,24 +23,60 @@ class FlightPlugin(commands.Cog):
     )
     async def flight(self, ctx):
 
-        await ctx.send(
-            "✈️ Flight System\n\n"
-            "Commands:\n"
-            ".flight setup\n"
-            ".flight config\n"
-            ".flight presets"
+        config = load("config")
+
+        airline = config.get(
+            "airline",
+            "Regional Express Australia"
         )
 
+        embed = discord.Embed(
+            title=f"✈️ {airline} Flight System",
+            description=(
+                "**Available Commands**\n\n"
+
+                "✈️ `.flight setup`\n"
+                "Creates the flight system channels\n\n"
+
+                "🛫 `.flight create`\n"
+                "Create a new flight RSVP\n\n"
+
+                "📋 `.flight presets`\n"
+                "Manage flight presets\n\n"
+
+                "⚙️ `.flight config`\n"
+                "Configure the flight system\n\n"
+
+                "🔒 `.flight end`\n"
+                "End an active flight"
+            ),
+            color=config.get(
+                "color",
+                0x1E90FF
+            )
+        )
+
+        if config.get("logo"):
+            embed.set_thumbnail(
+                url=config["logo"]
+            )
+
+        await ctx.send(embed=embed)
 
 
-    # ==============================
-    # SETUP COMMAND
-    # ==============================
 
+    # ==========================
+    # SETUP
+    # ==========================
 
     @flight.command()
     @commands.has_permissions(administrator=True)
-    async def setup(self, ctx, category: discord.CategoryChannel=None):
+    async def setup(
+        self,
+        ctx,
+        *,
+        category: discord.CategoryChannel = None
+    ):
 
         config = load("config")
 
@@ -60,13 +90,11 @@ class FlightPlugin(commands.Cog):
             return
 
 
-
         if category is None:
 
             category = await ctx.guild.create_category(
                 "✈️ Flight System"
             )
-
 
 
         flight_channel = await ctx.guild.create_text_channel(
@@ -81,7 +109,6 @@ class FlightPlugin(commands.Cog):
         )
 
 
-
         config = {
 
             "category": category.id,
@@ -90,12 +117,14 @@ class FlightPlugin(commands.Cog):
 
             "flight_log_channel": log_channel.id,
 
-            "airline": "Regional Express Australia",
+            "airline":
+                "Regional Express Australia",
 
-            "color": 0x1E90FF,
+            "color":
+                0x1E90FF,
 
-            "logo": None
-
+            "logo":
+                None
         }
 
 
@@ -105,76 +134,115 @@ class FlightPlugin(commands.Cog):
         )
 
 
-
         embed = discord.Embed(
 
-            title="✈️ Flight System Setup",
+            title="✅ Flight System Setup Complete",
 
-            description=
-            f"Flight Channel: {flight_channel.mention}\n"
-            f"Logs: {log_channel.mention}",
+            description=(
+                f"📢 Flight Channel:\n"
+                f"{flight_channel.mention}\n\n"
+
+                f"📋 Logs:\n"
+                f"{log_channel.mention}\n\n"
+
+                f"Category:\n"
+                f"{category.name}"
+            ),
 
             color=config["color"]
 
         )
 
 
-        await ctx.send(
-            embed=embed
-        )
+        await ctx.send(embed=embed)
 
 
 
-    # ==============================
-    # CONFIG COMMAND
-    # ==============================
-
+    # ==========================
+    # CONFIG COMMAND GROUP
+    # ==========================
 
     @flight.group(
         name="config",
         invoke_without_command=True
     )
-    async def config(self, ctx):
+    async def config(
+        self,
+        ctx
+    ):
 
         data = load("config")
 
 
         embed = discord.Embed(
-
-            title="✈️ Flight Configuration",
-
+            title="⚙️ Flight Configuration",
             color=data.get(
                 "color",
                 0x1E90FF
             )
-
         )
 
 
-        for key,value in data.items():
+        if not data:
+
+            embed.description = (
+                "Flight system has not been setup."
+            )
+
+            await ctx.send(embed=embed)
+            return
+
+
+
+        fields = {
+
+            "Airline":
+                data.get("airline"),
+
+            "Flight Channel":
+                f"<#{data.get('flight_channel')}>",
+
+            "Log Channel":
+                f"<#{data.get('flight_log_channel')}>",
+
+            "Category":
+                f"<#{data.get('category')}>",
+
+            "Colour":
+                hex(
+                    data.get(
+                        "color",
+                        0x1E90FF
+                    )
+                ),
+
+            "Logo":
+                data.get("logo")
+                or "None"
+
+        }
+
+
+        for name,value in fields.items():
 
             embed.add_field(
-
-                name=key,
-
+                name=name,
                 value=str(value),
-
                 inline=False
-
             )
 
 
-        await ctx.send(
-            embed=embed
-        )
+        await ctx.send(embed=embed)
 
 
 
-    @config.command(
-        name="airline"
-    )
+    # ==========================
+    # AIRLINE
+    # ==========================
+
+    @config.command()
     @commands.has_permissions(administrator=True)
-    async def config_airline(
+    async def airline(
         self,
         ctx,
         *,
@@ -183,9 +251,7 @@ class FlightPlugin(commands.Cog):
 
         data = load("config")
 
-
         data["airline"] = name
-
 
         save(
             "config",
@@ -199,32 +265,118 @@ class FlightPlugin(commands.Cog):
 
 
 
-    @config.command(
-        name="color"
-    )
+    # ==========================
+    # CHANNEL
+    # ==========================
+
+    @config.command()
     @commands.has_permissions(administrator=True)
-    async def config_color(
+    async def channel(
+        self,
+        ctx,
+        channel: discord.TextChannel
+    ):
+
+        data = load("config")
+
+        data["flight_channel"] = channel.id
+
+        save(
+            "config",
+            data
+        )
+
+
+        await ctx.send(
+            f"✅ Flight channel set to {channel.mention}"
+        )
+
+
+
+    # ==========================
+    # LOG CHANNEL
+    # ==========================
+
+    @config.command()
+    @commands.has_permissions(administrator=True)
+    async def logs(
+        self,
+        ctx,
+        channel: discord.TextChannel
+    ):
+
+        data = load("config")
+
+        data["flight_log_channel"] = channel.id
+
+        save(
+            "config",
+            data
+        )
+
+
+        await ctx.send(
+            f"✅ Log channel set to {channel.mention}"
+        )
+
+
+
+    # ==========================
+    # CATEGORY
+    # ==========================
+
+    @config.command()
+    @commands.has_permissions(administrator=True)
+    async def category(
+        self,
+        ctx,
+        category: discord.CategoryChannel
+    ):
+
+        data = load("config")
+
+        data["category"] = category.id
+
+        save(
+            "config",
+            data
+        )
+
+
+        await ctx.send(
+            f"✅ Category set to **{category.name}**"
+        )
+
+
+
+    # ==========================
+    # COLOR
+    # ==========================
+
+    @config.command()
+    @commands.has_permissions(administrator=True)
+    async def color(
         self,
         ctx,
         colour
     ):
 
-
-        data = load("config")
-
-
         try:
 
-            if colour.startswith("#"):
+            colour = colour.replace(
+                "#",
+                ""
+            )
 
-                colour = colour.replace("#","")
-
-
-            data["color"] = int(
+            value = int(
                 colour,
                 16
             )
 
+
+            data = load("config")
+
+            data["color"] = value
 
             save(
                 "config",
@@ -240,15 +392,42 @@ class FlightPlugin(commands.Cog):
         except:
 
             await ctx.send(
-                "❌ Invalid colour."
+                "❌ Invalid colour format."
             )
 
 
 
-    # ==============================
-    # ERROR HANDLING
-    # ==============================
+    # ==========================
+    # LOGO
+    # ==========================
 
+    @config.command()
+    @commands.has_permissions(administrator=True)
+    async def logo(
+        self,
+        ctx,
+        url
+    ):
+
+        data = load("config")
+
+        data["logo"] = url
+
+        save(
+            "config",
+            data
+        )
+
+
+        await ctx.send(
+            "✅ Logo updated."
+        )
+
+
+
+    # ==========================
+    # ERRORS
+    # ==========================
 
     @setup.error
     async def setup_error(
@@ -263,7 +442,7 @@ class FlightPlugin(commands.Cog):
         ):
 
             await ctx.send(
-                "❌ Administrator permission required."
+                "❌ Administrator permissions required."
             )
 
 
