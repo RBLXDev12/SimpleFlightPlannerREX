@@ -1,0 +1,11 @@
+# Python virtual environments
+venv/
+Flight/venv/
+Flight/pyvenv.cfg
+
+# Python cache
+__pycache__/
+*.pyc
+
+# VS Code
+.vscode/
